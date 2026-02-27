@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Sites{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">WooCommerce Sites</h1>
+  <a href="/admin/sites/new" class="btn btn-primary">+ Add Site</a>
+</div>
+
+<div class="search-bar">
+  <form method="get" action="/admin/sites">
+    <input
+      type="text"
+      name="q"
+      value="{{ q }}"
+      placeholder="Search by name, site ID or URL…"
+      autocomplete="off"
+    >
+  </form>
+</div>
+
+{% if sites %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Status</th>
+        <th>Name</th>
+        <th>Site ID</th>
+        <th>Base URL</th>
+        <th>SKUs</th>
+        <th>Last Sync</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for site in sites %}
+      <tr>
+        <td>
+          {% if site.is_active %}
+          <span class="pill pill-active">Active</span>
+          {% else %}
+          <span class="pill pill-inactive">Inactive</span>
+          {% endif %}
+        </td>
+        <td>{{ site.name or "—" }}</td>
+        <td class="mono">{{ site.site_id }}</td>
+        <td class="mono" style="font-size:11px">{{ site.base_url }}</td>
+        <td>{{ sku_counts.get(site.site_id, 0) }}</td>
+        <td class="mono" style="font-size:11px">
+          {% if site.last_sync_at %}
+            {{ site.last_sync_at.strftime('%Y-%m-%d %H:%M') }}
+          {% else %}
+            Never
+          {% endif %}
+        </td>
+        <td>
+          <div class="actions">
+            <a href="/admin/sites/{{ site.id }}/edit" class="btn btn-ghost btn-sm">Edit</a>
+
+            <form method="post" action="/admin/sites/{{ site.id }}/refresh-mapping" style="display:inline">
+              <button type="submit" class="btn btn-ghost btn-sm">Sync SKUs</button>
+            </form>
+
+            <form method="post" action="/admin/sites/{{ site.id }}/deactivate"
+                  style="display:inline"
+                  onsubmit="return confirm('Toggle active state for {{ site.site_id }}?')">
+              <button type="submit" class="btn btn-danger btn-sm">
+                {% if site.is_active %}Deactivate{% else %}Activate{% endif %}
+              </button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card" style="text-align:center;padding:40px">
+  <p style="color:var(--muted);margin-bottom:16px">
+    {% if q %}No sites matching "{{ q }}"{% else %}No sites configured yet.{% endif %}
+  </p>
+  {% if not q %}
+  <a href="/admin/sites/new" class="btn btn-primary">Add your first site</a>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

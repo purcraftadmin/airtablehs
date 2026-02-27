@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}{% if site %}Edit Site{% else %}New Site{% endif %}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">{% if site %}Edit Site · {{ site.site_id }}{% else %}Add Site{% endif %}</h1>
+  <a href="/admin/sites" class="btn btn-ghost">← Back</a>
+</div>
+
+<div class="card" style="max-width:640px">
+  <form
+    method="post"
+    action="{% if site %}/admin/sites/{{ site.id }}{% else %}/admin/sites{% endif %}"
+    autocomplete="off"
+  >
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label" for="name">Display Name</label>
+        <input
+          class="form-input"
+          type="text"
+          id="name"
+          name="name"
+          value="{{ site.name if site else (form.name if form else '') }}"
+          placeholder="Main Store"
+        >
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="site_id">
+          Site ID
+          {% if site %}<span style="color:var(--muted)">(read-only)</span>{% endif %}
+        </label>
+        <input
+          class="form-input"
+          type="text"
+          id="site_id"
+          name="site_id"
+          value="{{ site.site_id if site else (form.site_id if form else '') }}"
+          placeholder="shop1"
+          {% if site %}readonly style="color:var(--muted)"{% endif %}
+        >
+        {% if errors.site_id %}
+        <div class="form-error">{{ errors.site_id }}</div>
+        {% else %}
+        <div class="form-hint">Lowercase, no spaces. Used in webhook payloads.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="base_url">Base URL</label>
+      <input
+        class="form-input"
+        type="url"
+        id="base_url"
+        name="base_url"
+        value="{{ site.base_url if site else (form.base_url if form else '') }}"
+        placeholder="https://shop1.example.com"
+      >
+      {% if errors.base_url %}
+      <div class="form-error">{{ errors.base_url }}</div>
+      {% endif %}
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label" for="wc_key">Consumer Key</label>
+        <input
+          class="form-input"
+          type="password"
+          id="wc_key"
+          name="wc_key"
+          placeholder="{% if site %}Leave blank to keep current{% else %}ck_…{% endif %}"
+          autocomplete="new-password"
+        >
+        {% if errors.wc_key %}
+        <div class="form-error">{{ errors.wc_key }}</div>
+        {% endif %}
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="wc_secret">Consumer Secret</label>
+        <input
+          class="form-input"
+          type="password"
+          id="wc_secret"
+          name="wc_secret"
+          placeholder="{% if site %}Leave blank to keep current{% else %}cs_…{% endif %}"
+          autocomplete="new-password"
+        >
+        {% if errors.wc_secret %}
+        <div class="form-error">{{ errors.wc_secret }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-check">
+        <input
+          type="checkbox"
+          name="is_active"
+          value="true"
+          {% if site is none or site.is_active %}checked{% endif %}
+        >
+        <span>Active</span>
+      </label>
+      <div class="form-hint">Inactive sites are excluded from stock propagation.</div>
+    </div>
+
+    <div style="display:flex;gap:12px;margin-top:8px">
+      <button type="submit" class="btn btn-primary">
+        {% if site %}Save Changes{% else %}Add Site{% endif %}
+      </button>
+      <a href="/admin/sites" class="btn btn-ghost">Cancel</a>
+    </div>
+
+  </form>
+</div>
+
+{% if site %}
+<div class="card" style="max-width:640px;margin-top:0">
+  <div class="section-title">Webhook Endpoint</div>
+  <p style="color:var(--muted);font-size:12px;margin-bottom:12px">
+    Configure these two webhooks in WooCommerce → Settings → Advanced → Webhooks
+    for site <strong style="color:var(--text)">{{ site.site_id }}</strong>:
+  </p>
+  <div style="margin-bottom:12px">
+    <div class="form-label">Order Paid</div>
+    <div class="mono" style="padding:8px;border:1px solid var(--border);word-break:break-all">
+      POST {{ request.base_url }}webhooks/woocommerce/order_paid
+    </div>
+  </div>
+  <div>
+    <div class="form-label">Refund / Cancel</div>
+    <div class="mono" style="padding:8px;border:1px solid var(--border);word-break:break-all">
+      POST {{ request.base_url }}webhooks/woocommerce/refund_or_cancel
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -48,6 +48,15 @@ class Settings(BaseSettings):
     propagation_max_retries: int = 5
     propagation_retry_base_seconds: float = 2.0
 
+    # ── Admin UI ─────────────────────────────────────────────────────────────
+    # Secret for signing session cookies. Generate: openssl rand -hex 32
+    session_secret_key: str = "change-me-in-production-use-openssl-rand-hex-32"
+    # Fernet key for encrypting WC credentials. Generate:
+    #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    config_encryption_key: str = ""
+    bootstrap_admin_user: Optional[str] = None
+    bootstrap_admin_password: Optional[str] = None
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

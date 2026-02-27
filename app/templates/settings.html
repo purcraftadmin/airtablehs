@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Settings</h1>
+</div>
+
+<form method="post" action="/admin/settings" style="max-width:640px">
+
+  <div class="card">
+    <div class="section-title">Behaviour</div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label" for="decrement_status">Decrement on Status</label>
+        <input
+          class="form-input"
+          type="text"
+          id="decrement_status"
+          name="decrement_status"
+          value="{{ cfg.decrement_status }}"
+          placeholder="processing"
+        >
+        <div class="form-hint">WooCommerce order status that triggers a stock decrement.</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="webhook_auth_mode">Webhook Auth Mode</label>
+        <select class="form-select" id="webhook_auth_mode" name="webhook_auth_mode">
+          <option value="hmac"   {% if cfg.webhook_auth_mode == 'hmac'   %}selected{% endif %}>HMAC-SHA256 (WC native)</option>
+          <option value="bearer" {% if cfg.webhook_auth_mode == 'bearer' %}selected{% endif %}>Bearer Token</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-check">
+        <input
+          type="checkbox"
+          name="backorders_default"
+          value="true"
+          {% if cfg.backorders_default %}checked{% endif %}
+        >
+        <span>Allow backorders by default (stock can go below 0)</span>
+      </label>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">Airtable Integration</div>
+
+    <div class="form-group">
+      <label class="form-check">
+        <input
+          type="checkbox"
+          id="airtable_enabled"
+          name="airtable_enabled"
+          value="true"
+          {% if cfg.airtable_enabled %}checked{% endif %}
+          onchange="document.getElementById('airtable-fields').style.display = this.checked ? 'block' : 'none'"
+        >
+        <span>Enable Airtable sync</span>
+      </label>
+    </div>
+
+    <div id="airtable-fields" style="display:{% if cfg.airtable_enabled %}block{% else %}none{% endif %}">
+      <div class="form-group">
+        <label class="form-label" for="airtable_api_key">API Key</label>
+        <input
+          class="form-input"
+          type="password"
+          id="airtable_api_key"
+          name="airtable_api_key"
+          placeholder="{% if cfg.airtable_api_key_encrypted %}Leave blank to keep current key{% else %}patXXXXXX…{% endif %}"
+          autocomplete="new-password"
+        >
+        <div class="form-hint">Personal access token. Only submit to update.</div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="airtable_base_id">Base ID</label>
+          <input
+            class="form-input"
+            type="text"
+            id="airtable_base_id"
+            name="airtable_base_id"
+            value="{{ cfg.airtable_base_id or '' }}"
+            placeholder="appXXXXXXXXX"
+          >
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="airtable_table_names">Table Names (JSON)</label>
+          <input
+            class="form-input"
+            type="text"
+            id="airtable_table_names"
+            name="airtable_table_names"
+            value="{{ cfg.airtable_table_names or '' }}"
+            placeholder='{"stock":"tblXXX","events":"tblYYY"}'
+          >
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <button type="submit" class="btn btn-primary">Save Settings</button>
+
+</form>
+{% endblock %}

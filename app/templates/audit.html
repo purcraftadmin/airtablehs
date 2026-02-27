@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Audit Log{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Audit Log</h1>
+</div>
+
+<div class="section-title">Inventory Events
+  <span style="font-weight:300;text-transform:none;letter-spacing:0;margin-left:8px;color:var(--muted)">
+    page {{ page }}
+  </span>
+</div>
+
+{% if events %}
+<div class="table-wrap" style="margin-bottom:32px">
+  <table>
+    <thead>
+      <tr>
+        <th>Timestamp</th>
+        <th>Site</th>
+        <th>Order</th>
+        <th>Line Item</th>
+        <th>SKU</th>
+        <th>Delta</th>
+        <th>Type</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for ev in events %}
+      <tr>
+        <td class="mono">{{ ev.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+        <td class="mono">{{ ev.site_id }}</td>
+        <td class="mono">{{ ev.order_id }}</td>
+        <td class="mono">{{ ev.line_item_id }}</td>
+        <td>{{ ev.sku }}</td>
+        <td class="mono">{% if ev.delta > 0 %}+{% endif %}{{ ev.delta }}</td>
+        <td><span class="pill pill-active">{{ ev.event_type }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div style="display:flex;gap:12px;margin-bottom:32px">
+  {% if page > 1 %}
+  <a href="/admin/audit?page={{ page - 1 }}" class="btn btn-ghost btn-sm">← Prev</a>
+  {% endif %}
+  {% if events|length == page_size %}
+  <a href="/admin/audit?page={{ page + 1 }}" class="btn btn-ghost btn-sm">Next →</a>
+  {% endif %}
+</div>
+{% else %}
+<p style="color:var(--muted);font-size:12px;margin-bottom:32px">No inventory events recorded.</p>
+{% endif %}
+
+<div class="section-title">Propagation Failures</div>
+
+{% if failures %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Last Tried</th>
+        <th>Site</th>
+        <th>SKU</th>
+        <th>Attempts</th>
+        <th>Error</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in failures %}
+      <tr>
+        <td class="mono">{{ f.last_tried.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+        <td class="mono">{{ f.site_id }}</td>
+        <td>{{ f.sku }}</td>
+        <td>{{ f.attempts }}</td>
+        <td style="max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:11px">
+          {{ f.error or "—" }}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p style="color:var(--muted);font-size:12px">No propagation failures.</p>
+{% endif %}
+{% endblock %}

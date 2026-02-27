@@ -29,6 +29,8 @@ WC Site 4 ──webhook──┘         │              └── WC REST API 
 | Propagation | asyncio queue → background worker with exponential-backoff retries |
 | Dead letters | Failed propagations logged to `propagation_failures` table |
 | Auth | HMAC-SHA256 (WooCommerce native) **or** Bearer token |
+| Admin UI | Session-based auth (bcrypt passwords, HTTP-only cookie) |
+| Secrets at rest | Fernet AES-128-CBC – credentials never stored in plaintext |
 | Airtable | Optional, best-effort, non-blocking – never SSOT |
 
 ---
@@ -38,33 +40,62 @@ WC Site 4 ──webhook──┘         │              └── WC REST API 
 ```
 .
 ├── app/
-│   ├── main.py                  # FastAPI app + lifespan
-│   ├── config.py                # Settings from .env
-│   ├── database.py              # Async SQLAlchemy engine
-│   ├── models.py                # ORM models
-│   ├── schemas.py               # Pydantic schemas
-│   ├── deps.py                  # Webhook signature verification
+│   ├── main.py                       # FastAPI app + lifespan + bootstrap
+│   ├── config.py                     # Settings from .env
+│   ├── database.py                   # Async SQLAlchemy engine
+│   ├── models.py                     # ORM models (inventory + admin)
+│   ├── schemas.py                    # Pydantic schemas
+│   ├── deps.py                       # Webhook signature verification
 │   ├── routers/
-│   │   ├── webhooks.py          # POST /webhooks/woocommerce/*
-│   │   └── admin.py             # GET/POST /admin/*
-│   └── services/
-│       ├── inventory.py         # Stock mutation (transactional)
-│       ├── propagation.py       # Background queue + WC push
-│       ├── wc_client.py         # WooCommerce REST API client
-│       ├── mapping.py           # SKU ↔ product_id mapping
-│       └── airtable.py          # Optional Airtable writer
+│   │   ├── webhooks.py               # POST /webhooks/woocommerce/*
+│   │   └── admin.py                  # GET /admin/health, /stock (JSON API)
+│   ├── admin/
+│   │   ├── auth.py                   # bcrypt, session helpers, flash
+│   │   ├── crypto.py                 # Fernet encrypt/decrypt
+│   │   ├── deps.py                   # require_admin dependency
+│   │   ├── templates_cfg.py          # Shared Jinja2Templates instance
+│   │   └── routers/
+│   │       ├── auth_routes.py        # GET/POST /admin/login, /admin/logout
+│   │       ├── dashboard.py          # GET /admin (dashboard)
+│   │       ├── sites.py              # CRUD /admin/sites/*
+│   │       ├── settings_routes.py    # GET/POST /admin/settings
+│   │       └── audit.py              # GET /admin/audit
+│   ├── services/
+│   │   ├── inventory.py              # Stock mutation (transactional)
+│   │   ├── propagation.py            # Background queue + WC push (reads DB sites)
+│   │   ├── wc_client.py              # WooCommerce REST API client
+│   │   ├── mapping.py                # SKU ↔ product_id mapping
+│   │   └── airtable.py               # Optional Airtable writer
+│   ├── templates/                    # Jinja2 HTML templates
+│   │   ├── base.html
+│   │   ├── login.html
+│   │   ├── dashboard.html
+│   │   ├── settings.html
+│   │   ├── audit.html
+│   │   └── sites/
+│   │       ├── list.html
+│   │       └── form.html
+│   └── static/
+│       └── admin.css                 # Black & white admin theme
 ├── cli/
-│   └── refresh_mappings.py      # CLI tool
+│   └── refresh_mappings.py           # CLI tool
 ├── migrations/
-│   └── init.sql                 # Postgres schema
+│   ├── init.sql                      # Core inventory schema
+│   └── 002_admin.sql                 # admin_users, app_settings, sites tables
+├── mu-plugins/
+│   └── wc-inventory-webhook-transform.php
 ├── tests/
 │   ├── conftest.py
 │   ├── test_stock.py
 │   ├── test_idempotency.py
-│   └── test_webhooks.py
+│   ├── test_webhooks.py
+│   ├── test_crypto.py                # Encryption roundtrip tests
+│   ├── test_admin_auth.py            # Login/logout/access tests
+│   └── test_admin_sites.py           # Site CRUD tests
 ├── docker-compose.yml
 ├── Dockerfile
 ├── requirements.txt
+├── requirements-dev.txt
 └── .env.example
 ```
 
@@ -80,17 +111,24 @@ cd wc-inventory-sync
 cp .env.example .env
 ```
 
-Edit `.env`:
+Edit `.env` – **required fields:**
 
 ```bash
-# Fill in your sites
-SITES='[
-  {"site_id":"shop1","base_url":"https://shop1.example.com","wc_key":"ck_...","wc_secret":"cs_..."},
-  {"site_id":"shop2","base_url":"https://shop2.example.com","wc_key":"ck_...","wc_secret":"cs_..."}
-]'
+# 1. Generate session signing secret
+SESSION_SECRET_KEY=$(openssl rand -hex 32)
 
-# Generate a strong secret
+# 2. Generate Fernet key for credential encryption
+CONFIG_ENCRYPTION_KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+
+# 3. Set the bootstrap admin credentials (used on first startup only)
+BOOTSTRAP_ADMIN_USER=admin
+BOOTSTRAP_ADMIN_PASSWORD=yourStrongPasswordHere
+
+# 4. Generate webhook secret
 WEBHOOK_SHARED_SECRET=$(openssl rand -hex 32)
+
+# 5. Optional: pre-seed sites from env (migrated to DB on first startup)
+# SITES='[{"site_id":"shop1","base_url":"https://shop1.example.com","wc_key":"ck_...","wc_secret":"cs_..."}]'
 ```
 
 ### 2. Start services
@@ -99,10 +137,96 @@ WEBHOOK_SHARED_SECRET=$(openssl rand -hex 32)
 docker compose up -d
 ```
 
+Both SQL migrations (`init.sql` and `002_admin.sql`) run automatically on first Postgres start.
+
 The API is available at `http://localhost:8000`.
 Health check: `curl http://localhost:8000/admin/health`
 
-### 3. Build SKU mappings (required before webhooks work)
+---
+
+## Admin UI – step-by-step setup
+
+### Step 1 – Log in
+
+Open `http://localhost:8000/admin` in your browser.
+You will be redirected to the login page. Sign in with `BOOTSTRAP_ADMIN_USER` / `BOOTSTRAP_ADMIN_PASSWORD`.
+
+### Step 2 – Add your first WooCommerce site
+
+1. Click **Sites** in the sidebar → **+ Add Site**
+2. Fill in:
+   - **Display Name**: human-readable label
+   - **Site ID**: short unique slug (e.g. `shop1`) – must match what your WC webhook sends as `site_id`
+   - **Base URL**: `https://shop1.example.com`
+   - **Consumer Key / Secret**: from WooCommerce → Settings → Advanced → REST API
+3. Click **Add Site**
+4. Repeat for each site (up to 30)
+
+### Step 3 – Configure webhooks on each WooCommerce site
+
+For each site, go to **WooCommerce → Settings → Advanced → Webhooks → Add Webhook** and create two:
+
+| Field | Webhook 1 | Webhook 2 |
+|---|---|---|
+| Name | Inventory Sync – Order | Inventory Sync – Refund |
+| Status | Active | Active |
+| Topic | Order updated | Order updated |
+| Delivery URL | `https://your-service/webhooks/woocommerce/order_paid` | `https://your-service/webhooks/woocommerce/refund_or_cancel` |
+| Secret | `WEBHOOK_SHARED_SECRET` value | same |
+
+Also install the `mu-plugins/wc-inventory-webhook-transform.php` file on each WC site (see Connecting WooCommerce Sites below) and add `define('WC_INV_SITE_ID', 'shop1');` to `wp-config.php`.
+
+### Step 4 – Refresh SKU mappings
+
+After adding a site, click **Sync SKUs** on the Sites page, or run:
+
+```bash
+# All sites
+docker compose exec api python -m cli.refresh_mappings
+
+# Single site
+docker compose exec api python -m cli.refresh_mappings --site shop1
+```
+
+Or via the API:
+```bash
+curl -X POST http://localhost:8000/admin/refresh-mappings/shop1
+```
+
+### Step 5 – Configure settings (optional)
+
+Click **Settings** in the sidebar to adjust:
+- **Decrement on Status** (default: `processing`)
+- **Backorders default**
+- **Webhook Auth Mode** (HMAC or Bearer)
+- **Airtable integration**
+
+Changes take effect immediately without restart.
+
+---
+
+## Admin Routes reference
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/admin/login` | Login page |
+| `POST` | `/admin/login` | Submit credentials |
+| `POST` | `/admin/logout` | End session |
+| `GET` | `/admin` | Dashboard (stats + recent activity) |
+| `GET` | `/admin/sites` | Sites list with search |
+| `GET` | `/admin/sites/new` | New site form |
+| `POST` | `/admin/sites` | Create site |
+| `GET` | `/admin/sites/{id}/edit` | Edit site form |
+| `POST` | `/admin/sites/{id}` | Update site |
+| `POST` | `/admin/sites/{id}/deactivate` | Toggle active state |
+| `POST` | `/admin/sites/{id}/refresh-mapping` | Sync SKUs for site |
+| `GET` | `/admin/settings` | Settings form |
+| `POST` | `/admin/settings` | Save settings |
+| `GET` | `/admin/audit` | Inventory events + propagation failures |
+
+---
+
+## Build SKU mappings (required before webhooks work)
 
 ```bash
 # All sites
@@ -299,18 +423,37 @@ Expected Airtable table schemas:
 
 ---
 
+## Database Schema
+
+```sql
+-- Core inventory (init.sql)
+products(sku PK, name, lead_time_days, reorder_point, backorders)
+stock(sku PK → products, on_hand, reserved, updated_at)
+site_sku_map(site_id, sku → products, product_id, variation_id)
+inventory_events(id, site_id, order_id, line_item_id, sku, delta, event_type, created_at)
+  UNIQUE(site_id, order_id, line_item_id, event_type)   ← idempotency key
+propagation_failures(id, site_id, sku, payload, error, attempts, created_at)
+
+-- Admin UI (002_admin.sql)
+admin_users(id UUID, username UNIQUE, password_hash, is_active, created_at)
+app_settings(id=1, decrement_status, backorders_default, webhook_auth_mode,
+             airtable_enabled, airtable_base_id, airtable_table_names,
+             airtable_api_key_encrypted, updated_at)
+sites(id UUID, site_id UNIQUE, name, base_url,
+      wc_key_encrypted, wc_secret_encrypted, is_active,
+      created_at, updated_at, last_sync_at)
+```
+
 ## Running Tests
 
 ```bash
-# Install test deps
-pip install -r requirements.txt
-pip install aiosqlite
+# Install test + dev dependencies
+pip install -r requirements-dev.txt
 
 # Run all tests
 pytest -v
 
 # With coverage
-pip install pytest-cov
 pytest --cov=app --cov-report=term-missing
 ```
 
@@ -318,11 +461,14 @@ pytest --cov=app --cov-report=term-missing
 
 ## Production Checklist
 
-- [ ] Use a reverse proxy (nginx/Caddy) with TLS in front of the service
+- [ ] Use a reverse proxy (nginx/Caddy) with TLS; set `https_only=True` in `SessionMiddleware`
+- [ ] Set `SESSION_SECRET_KEY` to a 64-char random hex string
+- [ ] Set `CONFIG_ENCRYPTION_KEY` and **back it up securely** – losing it means losing stored credentials
 - [ ] Set `WEBHOOK_SHARED_SECRET` to a 64-char random hex string
-- [ ] Restrict `/admin/*` endpoints with IP allowlisting or an auth middleware
+- [ ] Set `BOOTSTRAP_ADMIN_USER` + `BOOTSTRAP_ADMIN_PASSWORD` then unset after first login
+- [ ] Restrict `/admin/*` UI to your IP range at the nginx/Caddy level
 - [ ] Set Postgres connection pooling appropriately for your load
-- [ ] Monitor `propagation_failures` table for stuck jobs
+- [ ] Monitor `propagation_failures` table for stuck jobs (visible in Admin → Audit)
 - [ ] Run `refresh-mappings` after any product/SKU changes on any site
 - [ ] Set up a cron job to periodically re-sync stock (full reconciliation):
   ```bash

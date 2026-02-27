@@ -108,8 +108,39 @@ async def _record_failure(
             )
 
 
+async def _get_active_sites() -> list:
+    """
+    Return active SiteConfig objects.
+    Prefers DB sites (decrypted); falls back to env SITES if DB is empty or unavailable.
+    """
+    from sqlalchemy import select as sa_select
+    from app.admin.crypto import decrypt
+    from app.models import Site as SiteModel
+
+    try:
+        async with get_db_ctx() as session:
+            db_sites = (
+                await session.execute(
+                    sa_select(SiteModel).where(SiteModel.is_active == True)
+                )
+            ).scalars().all()
+            if db_sites:
+                return [
+                    SiteConfig(
+                        site_id=s.site_id,
+                        base_url=s.base_url,
+                        wc_key=decrypt(s.wc_key_encrypted),
+                        wc_secret=decrypt(s.wc_secret_encrypted),
+                    )
+                    for s in db_sites
+                ]
+    except Exception as exc:
+        logger.warning("Could not read sites from DB, falling back to env: %s", exc)
+    return settings.sites
+
+
 async def _handle_job(job: PropagationJob) -> None:
-    sites = settings.sites
+    sites = await _get_active_sites()
     max_retries = settings.propagation_max_retries
     base_delay = settings.propagation_retry_base_seconds
 

@@ -1,8 +1,9 @@
 """
-SQLAlchemy ORM models mirroring migrations/init.sql.
+SQLAlchemy ORM models mirroring migrations/init.sql + 002_admin.sql.
 """
 from __future__ import annotations
 
+import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import (
@@ -11,7 +12,6 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
-    String,
     Text,
     UniqueConstraint,
 )
@@ -106,4 +106,61 @@ class PropagationFailure(Base):
     )
     last_tried: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_now
+    )
+
+
+# ── Admin UI models ──────────────────────────────────────────────────────────
+
+class AdminUser(Base):
+    __tablename__ = "admin_users"
+
+    id: Mapped[str] = mapped_column(
+        Text, primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    username: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now
+    )
+
+
+class AppSettings(Base):
+    """Single-row config table (id always = 1)."""
+    __tablename__ = "app_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    decrement_status: Mapped[str] = mapped_column(Text, nullable=False, default="processing")
+    backorders_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    webhook_auth_mode: Mapped[str] = mapped_column(Text, nullable=False, default="hmac")
+    airtable_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    airtable_base_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    airtable_table_names: Mapped[str | None] = mapped_column(Text, nullable=True)
+    airtable_api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now, onupdate=_now
+    )
+
+
+class Site(Base):
+    """WooCommerce site managed through the admin UI (credentials stored encrypted)."""
+    __tablename__ = "sites"
+
+    id: Mapped[str] = mapped_column(
+        Text, primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    site_id: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    base_url: Mapped[str] = mapped_column(Text, nullable=False)
+    wc_key_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    wc_secret_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now, onupdate=_now
+    )
+    last_sync_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )

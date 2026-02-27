@@ -5,3 +5,9 @@ asyncpg==0.30.0
 pydantic==2.10.3
 pydantic-settings==2.7.0
 httpx==0.28.1
+# Admin UI
+Jinja2==3.1.4
+python-multipart==0.0.20
+passlib[bcrypt]==1.7.4
+cryptography==43.0.3
+itsdangerous==2.2.0

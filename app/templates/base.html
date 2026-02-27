@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Inventory Sync{% endblock %} · Admin</title>
+  <link rel="stylesheet" href="/static/admin.css">
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span>INV SYNC</span>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="/admin"          class="nav-link {% if active == 'dashboard' %}active{% endif %}">Dashboard</a>
+      <a href="/admin/sites"    class="nav-link {% if active == 'sites'     %}active{% endif %}">Sites</a>
+      <a href="/admin/settings" class="nav-link {% if active == 'settings'  %}active{% endif %}">Settings</a>
+      <a href="/admin/audit"    class="nav-link {% if active == 'audit'     %}active{% endif %}">Audit</a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <form action="/admin/logout" method="post">
+        <button type="submit" class="nav-link logout-btn">Logout</button>
+      </form>
+      {% if user %}
+      <div class="sidebar-user">{{ user.username }}</div>
+      {% endif %}
+    </div>
+  </aside>
+
+  <main class="main-content">
+
+    {% if flash %}
+    <div class="flash flash-{{ flash.kind }}">{{ flash.message }}</div>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+
+  </main>
+</div>
+</body>
+</html>

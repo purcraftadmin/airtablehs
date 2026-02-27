@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login · Inventory Sync Admin</title>
+  <link rel="stylesheet" href="/static/admin.css">
+</head>
+<body>
+<div class="login-container">
+  <div class="login-box">
+    <div class="login-title">Inventory Sync</div>
+
+    {% if flash %}
+    <div class="flash flash-{{ flash.kind }}" style="margin-bottom:20px">{{ flash.message }}</div>
+    {% endif %}
+
+    <form method="post" action="/admin/login" autocomplete="off">
+      <div class="form-group">
+        <label class="form-label" for="username">Username</label>
+        <input
+          class="form-input"
+          type="text"
+          id="username"
+          name="username"
+          autocomplete="username"
+          autofocus
+          required
+        >
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="password">Password</label>
+        <input
+          class="form-input"
+          type="password"
+          id="password"
+          name="password"
+          autocomplete="current-password"
+          required
+        >
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px">
+        Sign In
+      </button>
+    </form>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Dashboard</h1>
+</div>
+
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-label">Active Sites</div>
+    <div class="stat-value">{{ stats.active_sites }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Total SKUs Tracked</div>
+    <div class="stat-value">{{ stats.total_skus }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Propagation Failures</div>
+    <div class="stat-value">{{ stats.failure_count }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Service</div>
+    <div class="stat-value" style="font-size:16px;padding-top:6px">Online</div>
+  </div>
+</div>
+
+<div class="form-row" style="align-items:start">
+
+  <div>
+    <div class="section-title">Recent Inventory Events</div>
+    {% if recent_events %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Site</th>
+            <th>SKU</th>
+            <th>Delta</th>
+            <th>Type</th>
+            <th>Order</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ev in recent_events %}
+          <tr>
+            <td class="mono">{{ ev.created_at.strftime('%m-%d %H:%M') }}</td>
+            <td class="mono">{{ ev.site_id }}</td>
+            <td>{{ ev.sku }}</td>
+            <td class="mono">{% if ev.delta > 0 %}+{% endif %}{{ ev.delta }}</td>
+            <td><span class="pill pill-active">{{ ev.event_type }}</span></td>
+            <td class="mono">{{ ev.order_id }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p style="color:var(--muted);font-size:12px">No events yet.</p>
+    {% endif %}
+    <div style="margin-top:12px">
+      <a href="/admin/audit" class="btn btn-ghost btn-sm">View all →</a>
+    </div>
+  </div>
+
+  <div>
+    <div class="section-title">Recent Propagation Failures</div>
+    {% if recent_failures %}
+    <ul class="event-list">
+      {% for f in recent_failures %}
+      <li class="event-item">
+        <div>
+          <div>{{ f.site_id }} / {{ f.sku }}</div>
+          <div class="event-meta">{{ f.error[:80] if f.error else "unknown error" }}</div>
+        </div>
+        <div class="event-meta">{{ f.attempts }} attempts</div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p style="color:var(--muted);font-size:12px">No failures.</p>
+    {% endif %}
+    <div style="margin-top:12px">
+      <a href="/admin/audit" class="btn btn-ghost btn-sm">View all →</a>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
